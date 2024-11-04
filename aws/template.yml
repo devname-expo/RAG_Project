@@ -1,0 +1,163 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: 'Stack for PDF upload and processing with two Lambda functions'
+
+Parameters:
+  StageName:
+    Type: String
+    Default: 'prod'
+    Description: 'API Gateway stage name'
+  PineconeEnvironment:
+    Type: String
+    Description: 'Pinecone Environment'
+
+Resources:
+  # Dependencies Layer
+  DependenciesLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: rag-dependencies
+      Description: Dependencies for RAG (PyMuPDF, google-generativeai, pinecone-client)
+      ContentUri: layers/
+      CompatibleRuntimes:
+        - python3.12
+      RetentionPolicy: Retain
+
+  # S3 Bucket for PDFs
+  UploadBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      # NotificationConfiguration:
+      #   LambdaConfigurations:
+      #     - Event: 's3:ObjectCreated:*'
+      #       Function: !GetAtt ProcessorFunction.Arn
+      #       Filter:
+      #         S3Key:
+      #           Rules:
+      #             - Name: suffix
+      #               Value: '.pdf'
+
+  LambdaLoggingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaLogging
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sts:AssumeRole
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  # More specific than managed policy
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*'
+  
+  # Uploader Lambda Function
+  UploaderFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: pdf_to_s3.lambda_handler
+      Runtime: python3.12
+      CodeUri: ../src/Uploader/
+      Layers:
+        - !Ref DependenciesLayer
+      MemorySize: 256
+      Timeout: 30
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref UploadBucket
+      Role: !GetAtt LambdaLoggingRole.Arn
+      Policies:
+        - PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource: !Sub 'arn:${AWS::Partition}:s3:::${UploadBucket}/*'
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /upload
+            Method: post
+
+  # Processor Lambda Function
+  ProcessorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: pdf_to_text.lambda_handler
+      Runtime: python3.12
+      CodeUri: ../src/Processor/
+      Layers:
+        - !Ref DependenciesLayer
+      MemorySize: 512
+      Timeout: 60
+      Role: !GetAtt LambdaLoggingRole.Arn
+      Policies:
+        - PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:DeleteObject
+                Resource: !Sub 'arn:${AWS::Partition}:s3:::${UploadBucket}/*'
+
+# Inference Lambda Function
+  InferenceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: inference.lambda_handler
+      Runtime: python3.12
+      CodeUri: ../src/Inference/
+      Layers:
+        - !Ref DependenciesLayer
+      MemorySize: 256
+      Timeout: 30
+      Environment:
+        Variables:
+          PINECONE_ENVIRONMENT: !Ref PineconeEnvironment
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /inference
+            Method: post
+      Role: !GetAtt LambdaLoggingRole.Arn
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: 
+                - !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:PINECONE_DEV_KEY-*'
+                - !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:GEMINI_DEV_KEY-*'
+
+Outputs:
+  UploadEndpoint:
+    Description: 'API Gateway endpoint URL for PDF upload'
+    Value: !Sub 'https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/${StageName}/upload'
+  InferenceEndpoint:
+    Description: 'API Gateway endpoint URL for inference'
+    Value: !Sub 'https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/${StageName}/inference'

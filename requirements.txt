@@ -1,0 +1,7 @@
+black
+boto3
+cfn-lint
+google-generativeai
+pinecone
+pydot
+PyMuPDF
