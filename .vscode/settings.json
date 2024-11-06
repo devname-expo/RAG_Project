@@ -14,7 +14,11 @@
         "-s",
         "./src",
         "-p",
-        "test_*.py"
+        "*test_*.py"
+    ],
+    "python.analysis.extraPaths": [
+        "./src/shared/python/",
+        "./.aws-sam/build"
     ],
     "yaml.customTags": [
         "!And",
@@ -35,6 +39,7 @@
         "!Split",
         "!Join sequence"
     ],
+    
     // Enable/disable default YAML formatter (requires restart)
     "yaml.format.enable": true,
 }

@@ -2,9 +2,12 @@ import argparse
 import requests
 from pathlib import Path
 import mimetypes
+import json
+from typing import Optional, Dict
 
-GENERATOR_URL = 'https://kj0317un2f.execute-api.us-east-1.amazonaws.com/Prod/upload'
+GENERATOR_URL = 'https://3gde7dimc6.execute-api.us-east-1.amazonaws.com/Prod/upload'
 PROCESSOR_URL = 'temp'
+INFERENCE_URL = 'https://3gde7dimc6.execute-api.us-east-1.amazonaws.com/Prod/inference'
 
 def upload_pdf(pdf_path: str) -> None:
     """
@@ -57,14 +60,56 @@ def upload_pdf(pdf_path: str) -> None:
     
     # print(f"Upload successful! File key: {file_key}")
 
+def query_model(question: str) -> Optional[Dict]:
+    """
+    Query the Lambda endpoint with a question
+    
+    Args:
+        question (str): The question to process
+        url (str): The endpoint URL (defaults to test.com/inference)
+        
+    Returns:
+        Optional[Dict]: Response from the server or None if request fails
+    """
+    try:
+        headers = {
+            'Content-Type': 'application/json'
+        }
+        
+        payload = {
+            'question': question
+        }
+        
+        response = requests.post(
+            INFERENCE_URL,
+            headers=headers,
+            json=payload,
+            timeout=60  # 30 second timeout
+        )
+        
+        # Raise an exception for bad status codes
+        response.raise_for_status()
+        print(f"Response status: {response.status_code}")
+        print(f"Response body: {response.text}")
+        return response.json()
+        
+    except requests.exceptions.RequestException as e:
+        print(f"Error querying inference endpoint: {str(e)}")
+        return None
+
+
 def main():
     parser = argparse.ArgumentParser(description='Upload PDF to S3 and trigger processing')
-    parser.add_argument('pdf_path', help='Path to the PDF file')
-    
+    parser.add_argument('--pdf_path', help='Path to the PDF file')
+    parser.add_argument('--query', help='question for the model')
     args = parser.parse_args()
     
     try:
-        upload_pdf(args.pdf_path)
+        if args.pdf_path:
+            upload_pdf(args.pdf_path)
+
+        if args.query:
+            query_model(args.query)
     except Exception as e:
         print(f"Error: {str(e)}")
         exit(1)

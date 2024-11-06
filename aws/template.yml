@@ -7,9 +7,6 @@ Parameters:
     Type: String
     Default: 'prod'
     Description: 'API Gateway stage name'
-  PineconeEnvironment:
-    Type: String
-    Description: 'Pinecone Environment'
 
 Resources:
   # Dependencies Layer
@@ -19,6 +16,16 @@ Resources:
       LayerName: rag-dependencies
       Description: Dependencies for RAG (PyMuPDF, google-generativeai, pinecone-client)
       ContentUri: ../.aws-sam/layers/
+      CompatibleRuntimes:
+        - python3.12
+      RetentionPolicy: Retain
+
+  UtilityLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: utility-layer
+      Description: Common utility functions layer
+      ContentUri: ../src/shared/
       CompatibleRuntimes:
         - python3.12
       RetentionPolicy: Retain
@@ -60,25 +67,25 @@ Resources:
       #             - Name: suffix
       #               Value: '.pdf'
 
-  BucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref UploadBucket
-      # PolicyDocument:
-      #   Version: '2012-10-17'
-      #   Statement:
-      #     - Sid: AllowPresignedUploads
-      #       Effect: Allow
-      #       Principal: '*'
-      #       Action: 
-      #       - s3:PutObject
-      #       - s3:PutObjectAcl
-      #       Resource: !Sub "${UploadBucket.Arn}/*"
-      #       Condition:
-      #         StringEquals:
-      #           's3:x-amz-acl': 'bucket-owner-full-control'
+  # BucketPolicy:
+  #   Type: AWS::S3::BucketPolicy
+  #   Properties:
+  #     Bucket: !Ref UploadBucket
+  #     PolicyDocument:
+  #       Version: '2012-10-17'
+  #       Statement:
+  #         - Sid: AllowPresignedUploads
+  #           Effect: Allow
+  #           Principal: '*'
+  #           Action: 
+  #           - s3:PutObject
+  #           - s3:PutObjectAcl
+  #           Resource: !Sub "${UploadBucket.Arn}/*"
+  #           Condition:
+  #             StringEquals:
+  #               's3:x-amz-acl': 'bucket-owner-full-control'
 
-  LambdaLoggingRole:
+  LambdaRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -99,8 +106,11 @@ Resources:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
+                  - secretsmanager:GetSecretValue              
                 Resource:
                   - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*'
+                  - !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:PINECONE_DEV_KEY*'
+                  - !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:GEMINI_DEV_KEY*'
   
   # UrlGenerator Lambda Function
   # UrlGeneratorFunction:
@@ -112,12 +122,13 @@ Resources:
   #     CodeUri: ../src/UrlGenerator/
   #     Layers:
   #       - !Ref DependenciesLayer
+  #       - !Ref UtilityLayer
   #     MemorySize: 256
   #     Timeout: 30
   #     Environment:
   #       Variables:
   #         BUCKET_NAME: !Ref UploadBucket
-  #     Role: !GetAtt LambdaLoggingRole.Arn
+  #     Role: !GetAtt LambdaRole.Arn
   #     Events:
   #       ApiEvent:
   #         Type: Api
@@ -145,19 +156,14 @@ Resources:
   #     CodeUri: ../src/Delegator/
   #     Layers:
   #       - !Ref DependenciesLayer
+  #       - !Ref UtilityLayer
   #     MemorySize: 256
   #     Timeout: 30
   #     Environment:
   #       Variables:
   #         BUCKET_NAME: !Ref UploadBucket
   #         LAMBDA_NAME: !Ref ProcessorFunction
-  #     Role: !GetAtt LambdaLoggingRole.Arn
-  #     Events:
-  #       ApiEvent:
-  #         Type: Api
-  #         Properties:
-  #           Path: /process
-  #           Method: post
+  #     Role: !GetAtt LambdaRole.Arn
   #     Policies:
   #       - PolicyDocument:
   #           Version: '2012-10-17'
@@ -181,9 +187,10 @@ Resources:
       CodeUri: ../src/Processor/
       Layers:
         - !Ref DependenciesLayer
+        - !Ref UtilityLayer
       MemorySize: 512
       Timeout: 60
-      Role: !GetAtt LambdaLoggingRole.Arn
+      Role: !GetAtt LambdaRole.Arn
       Policies:
         - PolicyDocument:
             Version: '2012-10-17'
@@ -203,38 +210,24 @@ Resources:
       CodeUri: ../src/Inference/
       Layers:
         - !Ref DependenciesLayer
+        - !Ref UtilityLayer
       MemorySize: 256
       Timeout: 30
       Environment:
         Variables:
-          PINECONE_ENVIRONMENT: !Ref PineconeEnvironment
-          PINECONE_KEY_NAME: 
+          LOG_LEVEL: info 
       Events:
         ApiEvent:
           Type: Api
           Properties:
             Path: /inference
             Method: post
-      Role: !GetAtt LambdaLoggingRole.Arn
-      Policies:
-        - Version: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Action:
-                - secretsmanager:GetSecretValue
-              Resource: 
-                - !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:PINECONE_DEV_KEY-*'
-                - !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:GEMINI_DEV_KEY-*'
+      Role: !GetAtt LambdaRole.Arn
 
 Outputs:
   # UploadEndpoint:
   #   Description: 'API Gateway endpoint URL for PDF upload'
   #   Value: !Sub 'https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/${StageName}/upload'
-  # DelegatorEndpoint:
-  #   Description: 'API Gateway endpoint URL for processing'
-  #   Value: !Sub 'https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/${StageName}/process'
-  #   Export:
-  #     Name: !Sub '${AWS::StackName}-api-endpoint'
   InferenceEndpoint:
     Description: 'API Gateway endpoint URL for inference'
     Value: !Sub 'https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/${StageName}/inference'

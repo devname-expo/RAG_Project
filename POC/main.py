@@ -13,13 +13,15 @@ if __name__ == '__main__':
     pc = Pinecone(api_key=PINECONE_DEV_KEY)
     index_name = 'semantic-search-gemini'
     print(pc.list_indexes().names())
+    index = pc.Index(index_name)
+    print(index.describe_index_stats())
     # pc.delete_index(index_name)
     # time.sleep(5)
 
-    for i,filename in enumerate(["docs/pdfs//Renard R.31 (1) (1).pdf","docs/pdfs/Australia Women's Softball Team (1) (1).pdf"]):
+    # for i,filename in enumerate(["docs/pdfs//Renard R.31 (1) (1).pdf","docs/pdfs/Australia Women's Softball Team (1) (1).pdf"]):
         
-        p = Path(filename)
-        get_docs(p, f".local/output/docs{i}")     
-        upload_embeddings(read_docs(f".local/output/docs{i}.json"), p.stem)
+    #     p = Path(filename)
+    #     get_docs(p, f".local/output/docs{i}")     
+    #     upload_embeddings(read_docs(f".local/output/docs{i}.json"), p.stem)
     
-    print(answer_question('Which two companies created the R.31 reconnaissance aircraft?'))
+    # print(answer_question('Which two companies created the R.31 reconnaissance aircraft?'))
