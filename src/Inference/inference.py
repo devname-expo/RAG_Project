@@ -34,7 +34,8 @@ def create_context(question):
     logger.debug("Querying Pinecone index for similar contexts")
     res = index.query(vector=[q_embeddings['embedding']], top_k=5, include_metadata=True)
     logger.debug(f"Found {len(res.matches)} matching contexts")
-    
+    logger.debug(f"Matches: {res.matches}")
+
     results = []
     for m in res.matches:
         text = m['metadata']['text']
@@ -47,32 +48,51 @@ def create_context(question):
     return context
 
 def answer_question(
-    question,
-    model="gemini-1.5-flash-8b",
+    question
 ):
     """
     Answer a question based on the most similar context from pinecone
     """
     logger.info(f"Starting to process question: {question}")
-    logger.debug(f"Parameters - model: {model}")
     
     genai.configure(api_key=GEMINI_DEV_KEY)
     logger.debug("Configured Gemini API")
 
     context = create_context(question)
     logger.debug(f"Retrieved context length: {len(context)}")
-
-    model = genai.GenerativeModel(model)
-    logger.debug(f"Initialized Gemini model: {model}")
+    
+    model1 = genai.GenerativeModel("gemini-1.5-flash-8b")
+    model2 = genai.GenerativeModel("gemini-1.5-flash")
+    model3 = genai.GenerativeModel("gemini-1.0-pro")
+    logger.debug(f"Initialized Gemini model")
 
     try:
         # Create a completions using the question and context
-        message =  f"You are a yoda chatbot for padawans. Strictly answer the question based on the context below, and if the question can't be answered based on the context, say \"I'm sorry I cannot answer the question\"\n\nContext: {context}\n\n---\n\nQuestion: {question}\nAnswer:"
+        message =  f"You are a learning tool for veterans. Answer the question based on the context below, and if the question can't be answered based on the context, say \"I'm sorry I cannot answer the question\"\n\nContext: {context}\n\n---\n\nQuestion: {question}\nAnswer:"
         logger.debug("Sending request to Gemini")
 
-        response = model.generate_content(message)
+        response = model1.generate_content(message)
+        try:
+            logger.info(f"Response text length: {len(response.text)}")
+        except:
+            response = model2.generate_content(message)
+            try:
+                logger.info(f"Response text length: {len(response.text)}")
+            except:
+                response = model3.generate_content(message)
+                try:
+                    logger.info(f"Response text length: {len(response.text)}")
+                except:
+                    response = "I cannot answer"
+
+        failure = "I'm sorry" in response.text
+        if not response.text or failure:
+            response = model2.generate_content(message)
+            if "I'm sorry" in response.text:
+                response = model3.generate_content(message)
+            
         logger.info("Successfully generated response from Gemini")
-        logger.debug(f"Response text length: {len(response.text)}")
+        # logger.debug(f"Response text length: {len(response.text)}")
 
         return response.text
     
