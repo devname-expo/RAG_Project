@@ -14,14 +14,23 @@ if __name__ == '__main__':
     index_name = 'semantic-search-gemini'
     print(pc.list_indexes().names())
     index = pc.Index(index_name)
-    print(index.describe_index_stats())
-    # pc.delete_index(index_name)
-    # time.sleep(5)
+    # print(index.describe_index_stats())
+    pc.delete_index(index_name)
+    time.sleep(5)
 
-    # for i,filename in enumerate(["docs/pdfs//Renard R.31 (1) (1).pdf","docs/pdfs/Australia Women's Softball Team (1) (1).pdf"]):
+    for i,filename in enumerate(["docs/pdfs/Renard R.31 (1) (1).pdf","docs/pdfs/Australia Women's Softball Team (1) (1).pdf"]):
         
-    #     p = Path(filename)
-    #     get_docs(p, f".local/output/docs{i}")     
-    #     upload_embeddings(read_docs(f".local/output/docs{i}.json"), p.stem)
+        p = Path(filename)
+        get_docs(p, f".local/output/docs{i}")     
+        upload_embeddings(read_docs(f".local/output/docs{i}.json"), p.stem)
     
-    # print(answer_question('Which two companies created the R.31 reconnaissance aircraft?'))
+    print(answer_question('Which two companies created the R.31 reconnaissance aircraft?'))
+    print()
+    print()
+    print(answer_question('What guns were mounted on the Renard R.31?'))
+    print()
+    print()
+    print(answer_question('Who was the first softball player to represent any country at four World Series of Softball?'))
+    print()
+    print()
+    print(answer_question('Who were the pitchers on the Australian softball team\'s roster at the 2020 Summer Olympics?'))

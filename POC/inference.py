@@ -31,7 +31,7 @@ def create_context(question):
 
 def answer_question(
     question="What is the R.31 reconnaissance aircraft?",
-    model="gemini-1.5-flash-8b",
+    model="gemini-1.5-flash",
     debug=False,
     max_tokens=150,
     stop_sequence=None
