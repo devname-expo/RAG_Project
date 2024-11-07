@@ -38,52 +38,6 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
-      # PublicAccessBlockConfiguration:
-      #   BlockPublicAcls: false
-      #   BlockPublicPolicy: false
-      #   IgnorePublicAcls: false
-      #   RestrictPublicBuckets: false
-      # CorsConfiguration:
-      #   CorsRules:
-      #     - AllowedHeaders:
-      #         - '*'
-      #       AllowedMethods:
-      #         - PUT
-      #         - POST
-      #         - GET
-      #       AllowedOrigins:
-      #         - '*'
-      #       ExposedHeaders:
-      #         - ETag
-      #       MaxAge: 3600
-
-      # NotificationConfiguration:
-      #   LambdaConfigurations:
-      #     - Event: 's3:ObjectCreated:*'
-      #       Function: !GetAtt ProcessorFunction.Arn
-      #       Filter:
-      #         S3Key:
-      #           Rules:
-      #             - Name: suffix
-      #               Value: '.pdf'
-
-  # BucketPolicy:
-  #   Type: AWS::S3::BucketPolicy
-  #   Properties:
-  #     Bucket: !Ref UploadBucket
-  #     PolicyDocument:
-  #       Version: '2012-10-17'
-  #       Statement:
-  #         - Sid: AllowPresignedUploads
-  #           Effect: Allow
-  #           Principal: '*'
-  #           Action: 
-  #           - s3:PutObject
-  #           - s3:PutObjectAcl
-  #           Resource: !Sub "${UploadBucket.Arn}/*"
-  #           Condition:
-  #             StringEquals:
-  #               's3:x-amz-acl': 'bucket-owner-full-control'
 
   LambdaRole:
     Type: AWS::IAM::Role
@@ -111,72 +65,6 @@ Resources:
                   - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*'
                   - !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:PINECONE_DEV_KEY*'
                   - !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:GEMINI_DEV_KEY*'
-  
-  # UrlGenerator Lambda Function
-  # UrlGeneratorFunction:
-  #   Type: AWS::Serverless::Function
-  #   DependsOn: UploadBucket
-  #   Properties:
-  #     Handler: s3_url_generator.lambda_handler
-  #     Runtime: python3.12
-  #     CodeUri: ../src/UrlGenerator/
-  #     Layers:
-  #       - !Ref DependenciesLayer
-  #       - !Ref UtilityLayer
-  #     MemorySize: 256
-  #     Timeout: 30
-  #     Environment:
-  #       Variables:
-  #         BUCKET_NAME: !Ref UploadBucket
-  #     Role: !GetAtt LambdaRole.Arn
-  #     Events:
-  #       ApiEvent:
-  #         Type: Api
-  #         Properties:
-  #           Path: /upload
-  #           Method: post
-  #     Policies:
-  #       - PolicyDocument:
-  #           Version: '2012-10-17'
-  #           Statement:
-  #             - Effect: Allow
-  #               Action:
-  #                 - s3:PutObject
-  #                 - s3:GetObject
-  #                 - s3:PutObjectAcl
-  #               Resource: !Sub "arn:aws:s3:::${UploadBucket}/*"
-
-   # Delegator Lambda Function
-  # DelegatorFunction:
-  #   Type: AWS::Serverless::Function
-  #   DependsOn: UploadBucket
-  #   Properties:
-  #     Handler: delegate_processing.lambda_handler
-  #     Runtime: python3.12
-  #     CodeUri: ../src/Delegator/
-  #     Layers:
-  #       - !Ref DependenciesLayer
-  #       - !Ref UtilityLayer
-  #     MemorySize: 256
-  #     Timeout: 30
-  #     Environment:
-  #       Variables:
-  #         BUCKET_NAME: !Ref UploadBucket
-  #         LAMBDA_NAME: !Ref ProcessorFunction
-  #     Role: !GetAtt LambdaRole.Arn
-  #     Policies:
-  #       - PolicyDocument:
-  #           Version: '2012-10-17'
-  #           Statement:
-  #             - Effect: Allow
-  #               Action:
-  #                 - s3:ListBucket
-  #               Resource: !Sub "arn:aws:s3:::${UploadBucket}/*"
-  #             - Effect: Allow
-  #               Action:
-  #                 - lambda:InvokeFunction
-  #               Resource:
-  #                 - !Ref ProcessorFunction
 
   # Processor Lambda Function
   ProcessorFunction:
@@ -225,9 +113,6 @@ Resources:
       Role: !GetAtt LambdaRole.Arn
 
 Outputs:
-  # UploadEndpoint:
-  #   Description: 'API Gateway endpoint URL for PDF upload'
-  #   Value: !Sub 'https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/${StageName}/upload'
   InferenceEndpoint:
     Description: 'API Gateway endpoint URL for inference'
     Value: !Sub 'https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/${StageName}/inference'
